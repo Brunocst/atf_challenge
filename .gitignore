@@ -9,4 +9,6 @@ __pycache__/
 eval/.run_cache.json
 eval/.ops_log.run.jsonl
 ops_log.jsonl
+eval/run*.log
+eval/results-targeted.md
 .DS_Store

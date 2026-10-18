@@ -60,9 +60,14 @@ change and never a service release.
 
 ## 4. Evaluating and monitoring over time
 
-- **Promote the golden set to a CI gate.** Re-run on every prompt, model, or policy-doc
-  change. The prototype's runner is already deterministic and exits non-zero on
-  failure, which is what makes it usable as a gate rather than a report.
+- **Promote the golden set to a CI gate — but not as it stands.** Re-run it on every
+  prompt, model, or policy-doc change; the runner is deterministic and exits non-zero on
+  failure, which is what makes it usable as a gate at all. The measurement around it is
+  not deterministic: two full samples of the *same* configuration scored 12/18 and 13/18,
+  with one case flipping either way. A naive gate would therefore fail builds on noise and
+  teach the team to ignore it. Pin `temperature=0`, run N repeats, and block on the
+  **stable** failure set — the handful of cases that failed in every sample — while the
+  noisy ones are reported but non-blocking until they have enough samples to be trusted.
 - **Agent Simulation before release → Agent Observability after.** Sample real
   escalations for human review weekly.
 - **Watch four numbers**: citation rate, escalate rate, tool error rate, and token

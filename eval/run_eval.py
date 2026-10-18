@@ -151,14 +151,36 @@ def count_packets() -> int:
     return sum(1 for line in config.OPS_LOG.read_text().splitlines() if line.strip())
 
 
-def cache_key(case: dict, model: str, as_of: str, threshold: float) -> str:
-    """Reuse a finished case across runs.
+def prompt_fingerprint() -> str:
+    """Short hash of everything that steers the model but is not a filename.
 
-    Keyed by model, clock *and* abstention threshold. Keying on the case alone would be
-    a trap: change the threshold and the cached result silently describes the old
-    configuration, so the suite would report a pass for behaviour that no longer exists.
+    The cache is keyed on model, clock, threshold *and prompt*, because editing any of
+    these changes every answer without changing a single filename. It covers:
+
+    - the instruction text
+    - every tool docstring, since ADK passes those to the model as the function
+      descriptions - a tool's prose is prompt, and it competes with the instruction
+    - the output schema descriptions
+
+    Miss any of them and a prompt fix keeps reporting the previous prompt's results as
+    a pass. That is the same stale-cache trap as the threshold, one level higher up.
     """
-    return f"{case['id']}|{model}|{as_of}|{threshold}"
+    import hashlib
+
+    from app.agent import root_agent
+    from app.contract import Answer
+
+    parts = [getattr(root_agent, "instruction", "") or ""]
+    for tool in getattr(root_agent, "tools", []) or []:
+        parts.append(getattr(tool, "__doc__", "") or "")
+    parts.append(json.dumps(Answer.model_json_schema(), sort_keys=True))
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:8]
+
+
+def cache_key(case: dict, model: str, as_of: str, threshold: float,
+              prompt: str) -> str:
+    """Reuse a finished case across runs, but only under identical configuration."""
+    return f"{case['id']}|{model}|{as_of}|{threshold}|{prompt}"
 
 
 def load_cache(path: Path) -> dict:
@@ -277,6 +299,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", default=str(ROOT / "eval" / "cases.jsonl"))
     parser.add_argument("--as-of", default=DEFAULT_AS_OF)
     parser.add_argument("--bucket", help="only run one bucket")
+    parser.add_argument("--only", metavar="IDS",
+                        help="comma-separated case ids to run, for iterating on "
+                             "specific failures")
     parser.add_argument("--model", metavar="ALIAS|MODEL_ID",
                         help="single model preset or id (default: $NOVAMART_MODEL)")
     parser.add_argument("--models", metavar="A,B,C",
@@ -290,9 +315,14 @@ def main(argv: list[str] | None = None) -> int:
                              "whenever that is possible, so a run only becomes "
                              "cross-model when it has to.")
     parser.add_argument("--sleep", type=float, default=12.0,
-                        help="pause between cases; the free tier allows about five "
-                             "model calls per minute per model")
-    parser.add_argument("--out", default=str(ROOT / "eval" / "results.md"))
+                        help="pause between cases. Pace *requests*, not cases: a case "
+                             "costs ~2.9 model calls, so 12s keeps a run under the "
+                             "15 requests/minute Flash-Lite allows (full Flash allows "
+                             "5). Lower values just buy 429 waits instead.")
+    parser.add_argument("--out", default=None,
+                        help="where to write the report. Defaults to eval/results.md, "
+                             "or eval/results-<filter>.md for --only/--bucket runs, so "
+                             "a targeted re-run cannot overwrite the scored report")
     parser.add_argument("--no-cache", action="store_true",
                         help="ignore cached results and re-run every case")
     args = parser.parse_args(argv)
@@ -319,6 +349,12 @@ def main(argv: list[str] | None = None) -> int:
     cases = load_cases(Path(args.cases))
     if args.bucket:
         cases = [c for c in cases if c["bucket"] == args.bucket]
+    if args.only:
+        wanted = {i.strip() for i in args.only.split(",") if i.strip()}
+        cases = [c for c in cases if c["id"] in wanted]
+        if not cases:
+            print(f"No cases matched --only {args.only}", file=sys.stderr)
+            return 2
 
     if args.models:
         # Explicit rotation: throughput at the cost of comparability.
@@ -334,12 +370,14 @@ def main(argv: list[str] | None = None) -> int:
 
     as_of = config.as_of().isoformat()
     threshold = config.MIN_SIMILARITY
+    prompt = prompt_fingerprint()
 
     cache_path = ROOT / "eval" / ".run_cache.json"
     cache = {} if args.no_cache else load_cache(cache_path)
 
     print(f"models={pool} ({'rotate' if rotate else 'primary+fallbacks'})  "
-          f"as_of={as_of}  threshold={threshold}  cases={len(cases)}\n")
+          f"as_of={as_of}  threshold={threshold}  prompt={prompt}  "
+          f"cases={len(cases)}\n")
 
     rows: list[dict] = []
     exhausted: set[str] = set()
@@ -354,7 +392,7 @@ def main(argv: list[str] | None = None) -> int:
         # Pass 1: reuse a finished case from any model in the pool before spending a
         # fresh call. A cached case costs no quota, so it is always the better choice.
         for index_in_pool, model in enumerate(pool):
-            cached = cache.get(cache_key(case, model, as_of, threshold))
+            cached = cache.get(cache_key(case, model, as_of, threshold, prompt))
             if cached and not cached.get("error"):
                 result, label, used_index = cached, "cache", index_in_pool
                 break
@@ -378,7 +416,7 @@ def main(argv: list[str] | None = None) -> int:
 
             attempt["packets_before"] = before
             attempt["packets_after"] = count_packets()
-            cache[cache_key(case, model, as_of, threshold)] = attempt
+            cache[cache_key(case, model, as_of, threshold, prompt)] = attempt
             save_cache(cache_path, cache)
             result, label, used_index = attempt, "fresh", index_in_pool
             break
@@ -417,10 +455,18 @@ def main(argv: list[str] | None = None) -> int:
         "total_cases": len(cases),
         "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    Path(args.out).write_text(render_report(rows, meta), encoding="utf-8")
+    # A targeted re-run is a diagnostic, not the measurement. Keep it away from the
+    # scored report file unless the caller asked for that path explicitly.
+    if args.out:
+        out_path = Path(args.out)
+    elif args.only or args.bucket:
+        out_path = ROOT / "eval" / f"results-{args.bucket or 'targeted'}.md"
+    else:
+        out_path = ROOT / "eval" / "results.md"
+    out_path.write_text(render_report(rows, meta), encoding="utf-8")
 
     passed = sum(1 for r in rows if not r["failures"])
-    print(f"\n{passed}/{len(rows)} passed  ->  {args.out}")
+    print(f"\n{passed}/{len(rows)} passed  ->  {out_path}")
     if incomplete:
         print("Run incomplete - not a valid result yet.")
         return 2

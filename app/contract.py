@@ -31,10 +31,13 @@ class Answer(BaseModel):
     )
     sources: list[Source] = Field(
         default_factory=list,
-        description="Every doc_id quoted. Empty when escalating.",
+        description="Every policy you actually consulted, in both states. An "
+        "escalation packet that omits these forces ops to repeat the lookup.",
     )
     confidence: float = Field(
-        description="0.0-1.0. Below 0.5 means state must be escalate."
+        description="0.0-1.0 confidence that the answer follows from the retrieved "
+        "text. Clear policy that answers 'no' is high confidence; uncertainty about "
+        "whether policy decides the case is what must become an escalation.",
     )
     needs_human: bool = Field(description="True whenever state is escalate.")
     packet_id: Optional[str] = Field(

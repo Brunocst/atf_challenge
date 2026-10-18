@@ -38,18 +38,26 @@ def draft_ops_escalation(
 ) -> dict:
     """Hand a question to the operations team when policy does not answer it.
 
-    Call this whenever you cannot answer from the retrieved policy text: nothing
-    relevant was found, the retrieved sections do not contain the rule that decides
-    the case, or the request needs an exception only ops can grant. Never guess.
-    Escalating is a correct outcome, not a failure.
+    Call this only when the retrieved policy documents do NOT decide the case: nothing
+    relevant was found, the retrieved sections do not contain the rule that decides it,
+    the rule is genuinely ambiguous for these facts, the question is outside NovaMart's
+    scope, or the request needs something the policy explicitly leaves to a human (an
+    exception, a goodwill credit, a price override).
+
+    Do NOT call this because the customer will be unhappy with the answer. If the
+    retrieved policy decides the case - including deciding against the customer - that
+    is a resolve. A refused request that policy already settles is not a decision ops
+    can improve on, and escalating it is what makes this system cost ops time instead
+    of saving it.
 
     Args:
         question: The employee's question, in their own words.
-        reason: Why this cannot be answered from policy, in one sentence.
+        reason: Why the documents do not decide this, in one sentence.
         decision_needed: The single decision the ops team has to make. Be specific -
             this is the point of the escalation.
         policies_considered: Comma-separated doc_ids that were retrieved and read,
-            so ops does not repeat the search. Empty string if none were relevant.
+            so ops does not repeat the search. Fill this in whenever anything was
+            retrieved, even if it did not settle the case.
         order_id: The order id, if one was looked up. Empty string otherwise.
 
     Returns:
