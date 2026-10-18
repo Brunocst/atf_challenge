@@ -1,0 +1,12 @@
+# --- NovaMart Copilot ---
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.embeddings_cache.json
+eval/.run_cache.json
+eval/.ops_log.run.jsonl
+ops_log.jsonl
+.DS_Store
