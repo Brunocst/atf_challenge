@@ -116,10 +116,15 @@ def build_agent(model: str | None = None) -> Agent:
     A factory rather than a single module-level instance so the model can be chosen
     per run (CLI flag, evaluation run, or model routing). `adk web` and `adk eval`
     pick up `root_agent` below.
+
+    The alias is resolved here rather than by each caller, so `--model flash-lite`,
+    `NOVAMART_MODEL=flash-lite` and a raw model id all behave the same way. Passing an
+    unresolved alias straight to ADK fails with `ValueError: Model flash-lite not
+    found`, because ADK only knows provider model names, not our presets.
     """
     return Agent(
         name="novamart_copilot",
-        model=model or config.MODEL,
+        model=config.resolve_model(model),
         description=(
             "Store-floor copilot for NovaMart. Answers policy and order questions from "
             "company documentation, and escalates to operations when policy does not "
