@@ -53,7 +53,15 @@ python -m app.cli "A customer in Toronto is asking about shipping to Canada and 
 Or use ADK's own web UI, which adds a **Trace** tab showing the full control loop:
 
 ```bash
-adk web .        # then open the app and pick novamart_copilot
+adk web .        # then pick the "app" entry; the agent inside is novamart_copilot
+```
+
+For an interactive terminal session with conversation memory, both of which the
+one-shot CLI above deliberately does not keep:
+
+```bash
+adk run app                              # REPL: type questions, same session throughout
+adk run app "Can I return NM-1042?"      # one question, non-interactive
 ```
 
 ## Evaluate
