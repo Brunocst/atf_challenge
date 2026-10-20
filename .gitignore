@@ -11,4 +11,6 @@ eval/.ops_log.run.jsonl
 ops_log.jsonl
 eval/run*.log
 eval/results-targeted.md
+# ADK local session storage, created by `adk web` / `adk run`
+.adk/
 .DS_Store
