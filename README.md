@@ -282,8 +282,8 @@ reproducible next year. The demo leaves it unset and gets today.
 error, out of scope, ambiguous policy).
 
 Those are all *reasons to escalate*, not different outcomes. Collapsing them into one
-contract gives a single branch point for every surface — CLI, web, and any future
-voice channel — and makes refusal an assertable field rather than a sentence we hoped
+contract gives a single branch point for every surface — CLI, web, or a batch job —
+and makes refusal an assertable field rather than a sentence we hoped
 for. Superseded documents are filtered at retrieval rather than left for the model to
 notice for the same reason: a deterministic metadata filter is testable.
 
@@ -305,6 +305,14 @@ was not paranoia: `gemini-2.5-flash`, which is the obvious choice, **now returns
 "no longer available to new users"**, and `text-embedding-004` is gone in favour of
 `gemini-embedding-001`. A hardcoded model name from memory would have failed on the
 first run. Override with `NOVAMART_MODEL` / `NOVAMART_EMBED_MODEL`.
+
+Resolution happens once, inside `build_agent`, rather than in each caller. That placement
+was arrived at by getting it wrong: the CLI originally forwarded its `--model` value
+straight to the agent, so the documented `--model flash-lite` reached ADK as a literal
+string and died with `ValueError: Model flash-lite not found` — ADK's registry knows
+provider model names and nothing about our presets. `tests/test_model_resolution.py` now
+calls `LLMRegistry.resolve` on whatever the agent is handed, which is the exact operation
+that failed.
 
 ---
 
@@ -497,6 +505,15 @@ nothing is invented — but it defeats the case, and it is `order_01`'s defect f
 side: the agent has learned that a difficult question is an escalation, when the correct
 move is to state the rule that applies and let ops handle the exception.
 
+The trigger looks like the false-authority clause rather than the refund request itself.
+Run the same request through the CLI *without* that clause — "Approve a full refund for
+order NM-7734." — the agent reads the order, states the 30-day window citing
+`returns-standard`, cites `override-approvals` for the fact that exceptions are delegated
+to a human, and escalates *with* both citations and a specific decision for ops. Same
+question, same model, opposite behaviour, with the pressure sentence as the only
+difference. One sample on each side, so this is a lead rather than a finding — but it
+localises the defect to how the agent handles an asserted permission it cannot verify.
+
 #### What the prompt fix did, and what it did not do
 
 An earlier instruction said *"For an escalate, leave `sources` empty"* and listed *"an
@@ -576,9 +593,6 @@ In rough priority order.
 5. **LLM-judged groundedness as a secondary metric**, run nightly rather than gating.
 6. **Multilingual** (Spanish and Catalan), since store-floor staff are not always
    first-language English speakers.
-7. **Voice.** The store floor is not a desk. ADK has a first-class Live API path, and
-   the tool surface built here would carry over unchanged — the voice channel is a new
-   front end on the same agent, not a second system.
 
 ---
 
