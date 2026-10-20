@@ -5,6 +5,12 @@ advise") costs ops the same thinking the associate could not do. The packet carr
 the question, the policies that were considered, the order snapshot, and the single
 decision ops still has to make, so ops can decide without re-doing the lookup.
 
+The hand-off is ASYNCHRONOUS. This call only queues the packet and returns; no answer
+comes back inside this conversation. The associate is told plainly that the documents
+do not answer the question, given the reference, and sent back to the customer while
+ops resolves it out of band. Blocking the counter on an ops queue is the failure mode
+this exists to avoid.
+
 Packets also accumulate into a doc-gap report (see eval/gap_report.py): the questions
 that could not be answered are the documentation backlog.
 """
@@ -61,7 +67,9 @@ def draft_ops_escalation(
         order_id: The order id, if one was looked up. Empty string otherwise.
 
     Returns:
-        A dict with the 'packet_id' to quote back to the employee, and the packet.
+        A dict with the 'packet_id' to quote back to the employee, the queue 'status',
+        the 'sla', and a 'message' saying how to phrase the refusal. The packet is
+        queued for operations; the answer is not produced by this call.
     """
     packet = {
         "packet_id": _next_packet_id(),
@@ -74,16 +82,22 @@ def draft_ops_escalation(
         ],
         "order_id": order_id or None,
         "raised_by": "novamart-copilot",
+        "status": "queued",
+        "sla": "1 business day",
     }
     with config.OPS_LOG.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(packet) + "\n")
 
     return {
-        "status": "escalated",
+        "status": "queued",
         "packet_id": packet["packet_id"],
         "decision_needed": packet["decision_needed"],
+        "sla": packet["sla"],
         "message": (
-            f"Escalation raised as {packet['packet_id']}. Tell the employee this "
-            f"reference and what happens next. Do not add a policy answer."
+            f"Escalation {packet['packet_id']} is queued for operations. It is "
+            "asynchronous: no answer arrives in this conversation. Tell the employee "
+            "plainly that the policy documents do not answer the question, give the "
+            "reference, and say operations will follow up. Do not add a policy answer "
+            "and do not imply the answer is coming now."
         ),
     }

@@ -104,7 +104,7 @@ def render(contract: dict | None, raw: str, trace: list[str], as_json: bool) -> 
         )
 
     state = contract.get("state", "?")
-    header = "RESOLVED" if state == "resolve" else "ESCALATED  (needs human)"
+    header = "RESOLVED" if state == "resolve" else "ESCALATED  (async — operations follows up)"
     lines = [f"TOOL TRACE\n{trace_line}", "", f"OUTCOME  {header}", ""]
 
     if state == "escalate":

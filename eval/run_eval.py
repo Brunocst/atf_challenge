@@ -61,6 +61,25 @@ DEFAULT_CORRECTION_CUES = (
     "old ", "instead", "rather than", "used to", "incorrect", "wrong", "expired",
 )
 
+# An escalation is also a refusal, and the refusal has to reach the employee. These
+# cues are the plain-language ways of saying "the documents do not answer this", so a
+# bare packet receipt ("Escalation packet OPS-0001 created") fails the case instead of
+# being scored as a safe hand-off.
+REFUSAL_CUES = (
+    "i don't know", "i do not know", "don't have", "do not have", "not cover",
+    "not answer", "no answer", "unable to answer", "no policy", "not in the policy",
+    "outside what the", "not something the", "outside novamart",
+)
+
+# The hand-off is asynchronous: the employee must be told the answer is not coming in
+# this conversation. Scored separately from the refusal because "I don't know" plus no
+# next step still leaves the associate standing at the counter waiting.
+ASYNC_CUES = (
+    "follow up", "follow-up", "follows up", "get back to", "be in touch", "notified",
+    "notification", "asynchronous", "asynchronously", "contact you", "don't need to wait",
+    "do not need to wait", "instead of waiting",
+)
+
 
 def load_cases(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
@@ -139,6 +158,19 @@ def check(case: dict, contract: dict | None, raw: str, trace: list[str],
         has_id = bool(contract.get("packet_id"))
         if not has_id and packets_after <= packets_before:
             failures.append("no escalation packet created")
+
+    if expect.get("require_refusal"):
+        if not any(cue in haystack for cue in REFUSAL_CUES):
+            failures.append(
+                "answer is not an explicit refusal - the employee is not told the "
+                "documents do not answer it"
+            )
+
+    if expect.get("require_async"):
+        if not any(cue in haystack for cue in ASYNC_CUES):
+            failures.append(
+                "answer does not say the follow-up is asynchronous and needs no wait"
+            )
 
     return failures
 

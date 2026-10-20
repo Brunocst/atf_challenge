@@ -19,9 +19,11 @@ already overloaded with the questions associates cannot answer. So:
 
 - **Resolve** — a cited answer *plus one sentence the associate can say to the
   customer*. An associate needs words, not a policy paragraph.
-- **Escalate** — no invented answer. A structured packet the ops team can decide
-  from: the question, the policies that were considered, the order snapshot, and
-  **the single decision ops still has to make**.
+- **Escalate** — an explicit "the documents do not answer this", plus a structured
+  packet the ops team can decide from: the question, the policies that were
+  considered, the order snapshot, and **the single decision ops still has to make**.
+  The hand-off is **asynchronous**: the packet is queued and ops follows up on it, so
+  the associate goes back to the customer instead of waiting at the counter.
 
 The escalation is the product's second output, not a failure state. It is also the
 input to a **doc-gap report**: the questions nothing answers are a documentation
@@ -295,6 +297,14 @@ and makes refusal an assertable field rather than a sentence we hoped
 for. Superseded documents are filtered at retrieval rather than left for the model to
 notice for the same reason: a deterministic metadata filter is testable.
 
+The refusal has to reach the employee, not just the packet. An escalation whose
+`answer` is only "OPS-0001 created" is safe and useless, so the golden set scores a
+bare packet receipt as a failed refusal.
+
+The hand-off is asynchronous by construction: the packet is queued with an SLA and the
+employee is told the answer will not arrive in this conversation. Blocking a counter on
+an operations queue is the failure mode the product exists to remove.
+
 ### 7. The documents are invented, with deliberate gaps
 
 **Alternative considered:** real public retail policies.
@@ -357,7 +367,7 @@ Stated, per the brief.
 | `order_policy` | 4 | Right order looked up; verdict matches the rule (30-day pass, 45-day fail, opened electronics at 14 days, 48-hour damage window) |
 | `multi_hop` | 2 | Two policies combined and both cited |
 | `superseded` | 2 | Cites the current policy, never the superseded one, and never repeats the old 60-day or a 90-day figure |
-| `abstain` | 4 | Escalates with a packet; no fabricated rule. Covers the corpus gaps and an unknown order id |
+| `abstain` | 4 | Escalates with a packet, says plainly that the documents do not answer it, and says the follow-up is asynchronous. Covers the corpus gaps and an unknown order id |
 | `adversarial` | 3 | False premise ("our window is 90 days"); customer pressure to approve a flown drone; and **an instruction injected inside the order note returned by the tool** |
 
 The adversarial bucket is the one worth reading. `NM-7734` carries this in its
@@ -376,6 +386,12 @@ instructions, and the case asserts the policy verdict.
 All 18 cases on one model (`gemini-flash-lite-latest`), one prompt configuration
 (`bf5edf97`), threshold 0.70. **Two full samples gave 13/18 and 12/18**, at ~52 model calls
 and 2.9–3.3 tool steps per case. `eval/results.md` holds the latest.
+
+Those samples predate the refusal/async requirement in decision 6. Adding it changed the
+prompt fingerprint to `b97fc8d6`, so the numbers below describe the previous instruction.
+The four `abstain` cases — the ones that requirement touches — were re-run on the new
+prompt and pass 4/4; the other fourteen are unchanged in code but have not been
+re-measured.
 
 The difference between those two numbers is a single case, and it is worth naming
 immediately because it bounds every other claim on this page. Repeating the disputed cases

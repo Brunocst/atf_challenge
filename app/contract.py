@@ -22,7 +22,11 @@ class Answer(BaseModel):
     )
     answer: str = Field(
         description="The response to the employee. Policy claims must be in the "
-        "retrieved documents. Never invent a rule. Never compute a date yourself."
+        "retrieved documents. Never invent a rule. Never compute a date yourself. "
+        "When state is escalate this must be an explicit refusal: say plainly that "
+        "the policy documents do not answer the question, then what you did find if "
+        "anything, then that operations will follow up asynchronously. A packet "
+        "number on its own is not an answer."
     )
     customer_script: Optional[str] = Field(
         default=None,

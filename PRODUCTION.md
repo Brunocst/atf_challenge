@@ -69,7 +69,9 @@ change and never a service release.
   **stable** failure set — the handful of cases that failed in every sample — while the
   noisy ones are reported but non-blocking until they have enough samples to be trusted.
 - **Agent Simulation before release → Agent Observability after.** Sample real
-  escalations for human review weekly.
+  escalations for human review weekly. Because the hand-off is asynchronous, also track
+  time-to-first-human-response and how many packets are resolved without being reopened:
+  a queue that never closes is a black hole with good UX.
 - **Watch four numbers**: citation rate, escalate rate, tool error rate, and token
   cost/latency per turn (ADK reports these as efficiency criteria with no extra model
   calls). Set a budget cap per project.
